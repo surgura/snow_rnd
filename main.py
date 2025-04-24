@@ -3,6 +3,7 @@ from scipy.signal.windows import gaussian
 import numpy.typing as npt
 import matplotlib.pyplot as plt
 from pyrpca import rpca_pcp_ialm
+from sklearn.preprocessing import MinMaxScaler
 
 
 def sliding_columnwise_transform(matrix, window_width, function):
@@ -41,32 +42,51 @@ def denoise(matrix: npt.ArrayLike) -> npt.ArrayLike:
     lmbda_factor = 1.5
     lmbda = 1.0 / np.sqrt(max(matrix.shape))
     low_rank, sparse = rpca_pcp_ialm(
-        matrix, sparsity_factor=lmbda_factor * lmbda, verbose=False
+        matrix,
+        sparsity_factor=lmbda_factor * lmbda,
+        verbose=True,
     )
-    return sparse[:, matrix.shape[1] // 2]
+    return sparse
 
 
 def main() -> None:
-    window_width = 15
+    makevis = lambda d: 10 * np.log10(d)
 
-    data = np.load("data/data.npy")
-    # data = data[:, :100]
-    rows, cols = data.shape
+    data = np.load("data/AWI_SR_array4.npy")
+    mask = np.isnan(data) | (data < 1e-12)
+    data = 10 * np.log10(data)
+    data[mask] = np.nan
+    data = (data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data))
+    cutoff = 100
+    data = data[:, :cutoff]
+    mask = mask[:, :cutoff]
 
-    denoised = sliding_columnwise_transform(
-        data, window_width=window_width, function=denoise
+    denoised = denoise(np.nan_to_num(data, nan=0.0))
+    # normed = np.clip(denoised, a_min=0.0, a_max=None) / np.max(denoised)
+
+    # denoised = sliding_columnwise_transform(
+    #     data, window_width=window_width, function=denoise
+    # )
+
+    # denoised_normed = (denoised - denoised.min()) / (denoised.max() - denoised.min())
+
+    red_overlay = np.zeros((*denoised.shape, 3))
+    red_overlay[..., 0] = 1
+
+    rangemin = 4600
+    rangemax = 5400
+    snapshot = 86
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10), constrained_layout=True)
+    axes[0, 0].imshow(data, aspect="auto", cmap="gray")
+    axes[0, 0].imshow(
+        red_overlay, alpha=mask.astype(np.float32), aspect="auto", zorder=1
     )
-
-    fig, axes = plt.subplots(3, 1, figsize=(15, 10), constrained_layout=True)
-    axes[0].imshow(data, aspect="auto", cmap="gray")
-    axes[1].imshow(denoised, aspect="auto", cmap="gray")
-
-    y = np.zeros(cols)
-    start = cols // 2 - window_width // 2
-    y[start : start + window_width] = (
-        1.0  # gaussian(window_width, window_width / 6, sym=True)
+    axes[0, 1].plot(data[rangemin:rangemax, snapshot])
+    axes[1, 0].imshow(denoised, aspect="auto", cmap="gray")
+    axes[1, 0].imshow(
+        red_overlay, alpha=mask.astype(np.float32), aspect="auto", zorder=1
     )
-    axes[2].plot(y, color="black")
+    axes[1, 1].plot(denoised[rangemin:rangemax, snapshot])
 
     plt.show()
 
