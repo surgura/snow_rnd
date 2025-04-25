@@ -1,41 +1,11 @@
 import numpy as np
-from scipy.signal.windows import gaussian
 import numpy.typing as npt
 import matplotlib.pyplot as plt
 from pyrpca import rpca_pcp_ialm
-from sklearn.preprocessing import MinMaxScaler
-
-
-def sliding_columnwise_transform(matrix, window_width, function):
-    """
-    Applies a sliding gaussian window across columns of a 2D matrix, transforming each window
-    with a custom function. Uses reflective boundary conditions.
-
-    Args:
-        matrix: Input 2D array of shape (rows, columns)
-        window_width: Width of the sliding window
-        function: Function to apply to each window (shape: [rows, window_width])
-                         Must return a 1D array of shape (rows,)
-        stddev: Standard deviation of gaussian window
-
-    Returns:
-        ndarray: Transformed matrix of shape (rows, columns)
-    """
-    rows, cols = matrix.shape
-    stddev = window_width / 6
-    pad = window_width // 2
-    padded = np.pad(matrix, ((0, 0), (pad, pad)), mode="reflect")
-    gaus = gaussian(window_width, stddev, sym=True)[None, :]  # shape (1, window_width)
-
-    result = np.empty((rows, cols))
-
-    for c in range(cols):  # [80:120]:
-        print(f"Column: {c} / {cols}")
-        window = padded[:, c : c + window_width]  # shape (rows, window_width)
-        # window = window * gaus
-        result[:, c] = function(window)  # func should return shape (rows,)
-
-    return result
+import cvxpy as cp
+from scipy.linalg import svd
+from pyproximal import L1
+import torch
 
 
 def denoise(matrix: npt.ArrayLike) -> npt.ArrayLike:
@@ -50,7 +20,58 @@ def denoise(matrix: npt.ArrayLike) -> npt.ArrayLike:
 
 
 def find_window(matrix: npt.ArrayLike) -> tuple[float, float]:
-    return 0, matrix.shape[0]
+    # lambda_ = 1.0  # penalize window size
+    # gamma = 10.0  # penalize transitions (TV)
+
+    # w = cp.Variable(matrix.shape[0])
+    # diag = cp.diag(1 - w)
+
+    # nuclear = cp.norm(diag @ matrix, "nuc")
+    # size_penalty = cp.sum(w)
+    # # tv_penalty = cp.norm1(w[1:] - w[:-1])
+
+    # objective = cp.Minimize(nuclear - lambda_ * size_penalty)
+    # constraints = [w >= 0, w <= 1]
+
+    # problem = cp.Problem(objective, constraints)
+    # problem.solve(verbose=True)
+    # # problem.solve(solver=cp.SCS, gp=False, enforce_dpp=False)
+
+    # print(w.value)
+
+    lambda_: float = 0.05
+    lr: float = 0.1
+    epochs: int = 30  # 300
+    epsilon: float = 1e-3
+
+    X = torch.tensor(matrix, dtype=torch.float32)
+    n_rows = X.shape[0]
+
+    # Initialize soft mask
+    w = torch.ones(n_rows, dtype=torch.float32, requires_grad=True)
+    optimizer = torch.optim.Adam([w], lr=lr)
+
+    for _ in range(epochs):
+        optimizer.zero_grad()
+
+        # Apply soft mask
+        Xw = torch.diag(w) @ X
+
+        # Smoothed nuclear norm
+        s = torch.linalg.svdvals(Xw)
+        smooth_nuclear = torch.sum(torch.sqrt(s**2 + epsilon))
+
+        # Loss = smooth nuclear norm - lambda * sum(w)
+        loss = smooth_nuclear - lambda_ * torch.sum(w)
+        print(loss)
+        loss.backward()
+        optimizer.step()
+
+        # Clip w to [0, 1]
+        with torch.no_grad():
+            w.clamp_(0, 1)
+
+    return 1.0 - w.detach().numpy()
 
 
 def main() -> None:
@@ -65,9 +86,13 @@ def main() -> None:
 
     window_mask = np.zeros_like(data)
 
-    width = 30
-    window = find_window(data[:, 30 : 30 + width])
-    window_mask[window[0] : window[1], :] = 1
+    for i in range(data.shape[1])[30:35]:
+        print(f"Window {i}")
+        width = 30
+        window = find_window(
+            np.nan_to_num(data, nan=0.0)[:, i - width // 2 : i + width // 2]
+        )
+        window_mask[:, i] = window  # window[:, np.newaxis]  # window
 
     red_overlay = np.zeros((*data.shape, 3))
     red_overlay[..., 0] = 1
@@ -76,10 +101,20 @@ def main() -> None:
     blue_overlay[..., 2] = 1
 
     fig, axes = plt.subplots(2, figsize=(15, 10), constrained_layout=True)
-    axes[0].imshow(data, aspect="auto", cmap="gray")
-    axes[0].imshow(red_overlay, alpha=mask.astype(np.float32), aspect="auto", zorder=1)
+    axes[0].imshow(data, aspect="auto", cmap="gray", interpolation="none")
     axes[0].imshow(
-        blue_overlay, alpha=1 - window_mask.astype(np.float32), aspect="auto", zorder=1
+        red_overlay,
+        alpha=mask.astype(np.float32),
+        aspect="auto",
+        zorder=1,
+        interpolation="none",
+    )
+    axes[0].imshow(
+        blue_overlay,
+        alpha=window_mask.astype(np.float32),
+        aspect="auto",
+        zorder=1,
+        interpolation="none",
     )
     plt.show()
 
