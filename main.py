@@ -109,6 +109,13 @@ def main() -> None:
 
         np.save("results/signal_mask.npy", window_mask)
 
+    # mask min/max
+    first = np.argmax(window_mask, axis=0)
+    last = window_mask.shape[0] - 1 - np.argmax(window_mask[::-1], axis=0)
+    signal_indices = np.stack([first - 5, last + 5], axis=1)
+    for i, (start, end) in enumerate(signal_indices):
+        window_mask[start:end, i] = 1
+
     red_overlay = np.zeros((*data.shape, 3))
     red_overlay[..., 0] = 1
 
