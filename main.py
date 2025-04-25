@@ -106,22 +106,29 @@ def main() -> None:
     blue_overlay = np.zeros((*data.shape, 3))
     blue_overlay[..., 2] = 1
 
-    fig, axes = plt.subplots(2, figsize=(15, 10), constrained_layout=True)
-    axes[0].imshow(data, aspect="auto", cmap="gray", interpolation="none")
-    axes[0].imshow(
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10), constrained_layout=True)
+    axes[0, 0].imshow(data, aspect="auto", cmap="gray", interpolation="none")
+    axes[0, 0].imshow(
         red_overlay,
         alpha=mask.astype(np.float32),
         aspect="auto",
         zorder=1,
         interpolation="none",
     )
-    axes[0].imshow(
+    axes[0, 0].imshow(
         blue_overlay,
         alpha=window_mask.astype(np.float32),
         aspect="auto",
         zorder=1,
         interpolation="none",
     )
+    axes[1, 0].imshow(data, aspect="auto", cmap="gray", interpolation="none")
+
+    idx = 0
+    indices = np.where(window_mask[:, idx] == 1)[0]
+    mindex = indices[0] - 5
+    maxdex = indices[-1] + 5
+    axes[0, 1].plot(data[mindex:maxdex, idx])
     plt.show()
 
 
