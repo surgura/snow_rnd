@@ -49,11 +49,9 @@ def denoise(matrix: npt.ArrayLike) -> npt.ArrayLike:
     return sparse
 
 
-def find_window(matrix: npt.ArrayLike) -> tuple[float, float]:
-    return 0, matrix.shape[0]
-
-
 def main() -> None:
+    makevis = lambda d: 10 * np.log10(d)
+
     data = np.load("data/AWI_SR_array4.npy")
     mask = np.isnan(data) | (data < 1e-12)
     data = 10 * np.log10(data)
@@ -63,24 +61,33 @@ def main() -> None:
     data = data[:, :cutoff]
     mask = mask[:, :cutoff]
 
-    window_mask = np.zeros_like(data)
+    denoised = denoise(np.nan_to_num(data, nan=0.0))
+    # normed = np.clip(denoised, a_min=0.0, a_max=None) / np.max(denoised)
 
-    width = 30
-    window = find_window(data[:, 30 : 30 + width])
-    window_mask[window[0] : window[1], :] = 1
+    # denoised = sliding_columnwise_transform(
+    #     data, window_width=window_width, function=denoise
+    # )
 
-    red_overlay = np.zeros((*data.shape, 3))
+    # denoised_normed = (denoised - denoised.min()) / (denoised.max() - denoised.min())
+
+    red_overlay = np.zeros((*denoised.shape, 3))
     red_overlay[..., 0] = 1
 
-    blue_overlay = np.zeros((*data.shape, 3))
-    blue_overlay[..., 2] = 1
-
-    fig, axes = plt.subplots(2, figsize=(15, 10), constrained_layout=True)
-    axes[0].imshow(data, aspect="auto", cmap="gray")
-    axes[0].imshow(red_overlay, alpha=mask.astype(np.float32), aspect="auto", zorder=1)
-    axes[0].imshow(
-        blue_overlay, alpha=1 - window_mask.astype(np.float32), aspect="auto", zorder=1
+    rangemin = 4600
+    rangemax = 5400
+    snapshot = 86
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10), constrained_layout=True)
+    axes[0, 0].imshow(data, aspect="auto", cmap="gray")
+    axes[0, 0].imshow(
+        red_overlay, alpha=mask.astype(np.float32), aspect="auto", zorder=1
     )
+    axes[0, 1].plot(data[rangemin:rangemax, snapshot])
+    axes[1, 0].imshow(denoised, aspect="auto", cmap="gray")
+    axes[1, 0].imshow(
+        red_overlay, alpha=mask.astype(np.float32), aspect="auto", zorder=1
+    )
+    axes[1, 1].plot(denoised[rangemin:rangemax, snapshot])
+
     plt.show()
 
 
