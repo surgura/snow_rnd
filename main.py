@@ -39,10 +39,11 @@ def find_window(matrix: npt.ArrayLike) -> tuple[float, float]:
 
     # print(w.value)
 
-    lambda_: float = 0.05
+    lambda_: float = 0.025
     lr: float = 0.1
     epochs: int = 30  # 300
     epsilon: float = 1e-3
+    tv_weight: float = 0.1
 
     X = torch.tensor(matrix, dtype=torch.float32)
     n_rows = X.shape[0]
@@ -61,9 +62,13 @@ def find_window(matrix: npt.ArrayLike) -> tuple[float, float]:
         s = torch.linalg.svdvals(Xw)
         smooth_nuclear = torch.sum(torch.sqrt(s**2 + epsilon))
 
-        # Loss = smooth nuclear norm - lambda * sum(w)
-        loss = smooth_nuclear - lambda_ * torch.sum(w)
-        print(loss)
+        # Total Variation on inverted mask (1 - w)
+        inverted = 1 - w
+        tv = torch.sum(torch.abs(inverted[1:] - inverted[:-1]))
+
+        # Total loss: nuclear norm - lambda * sum(w) + TV on (1 - w)
+        loss = smooth_nuclear - lambda_ * torch.sum(w) + tv_weight * tv
+        print(loss.item())
         loss.backward()
         optimizer.step()
 
@@ -71,7 +76,7 @@ def find_window(matrix: npt.ArrayLike) -> tuple[float, float]:
         with torch.no_grad():
             w.clamp_(0, 1)
 
-    return 1.0 - w.detach().numpy()
+    return 1.0 - w.detach().numpy() > 0.2
 
 
 def main() -> None:
@@ -86,13 +91,14 @@ def main() -> None:
 
     window_mask = np.zeros_like(data)
 
-    for i in range(data.shape[1])[30:35]:
+    width = 9
+    pad = width // 2
+    data_padded = np.pad(data, ((0, 0), (pad, pad)), mode="reflect")
+
+    for i in range(data.shape[1])[:1]:
         print(f"Window {i}")
-        width = 30
-        window = find_window(
-            np.nan_to_num(data, nan=0.0)[:, i - width // 2 : i + width // 2]
-        )
-        window_mask[:, i] = window  # window[:, np.newaxis]  # window
+        window = find_window(np.nan_to_num(data_padded, nan=0.0)[:, i : i + width])
+        window_mask[:, i] = window
 
     red_overlay = np.zeros((*data.shape, 3))
     red_overlay[..., 0] = 1
