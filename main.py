@@ -6,6 +6,8 @@ import cvxpy as cp
 from scipy.linalg import svd
 from pyproximal import L1
 import torch
+from pathlib import Path
+import os
 
 
 def denoise(matrix: npt.ArrayLike) -> npt.ArrayLike:
@@ -80,25 +82,32 @@ def find_window(matrix: npt.ArrayLike) -> tuple[float, float]:
 
 
 def main() -> None:
+    Path("results").mkdir(exist_ok=True)
+
     data = np.load("data/AWI_SR_array4.npy")
     mask = np.isnan(data) | (data < 1e-12)
     data = 10 * np.log10(data)
     data[mask] = np.nan
     data = (data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data))
-    cutoff = 100
+    cutoff = 50
     data = data[:, :cutoff]
     mask = mask[:, :cutoff]
 
-    window_mask = np.zeros_like(data)
+    if os.path.isfile("results/signal_mask.npy"):
+        window_mask = np.load("results/signal_mask.npy")
+    else:
+        window_mask = np.zeros_like(data)
 
-    width = 9
-    pad = width // 2
-    data_padded = np.pad(data, ((0, 0), (pad, pad)), mode="reflect")
+        width = 9
+        pad = width // 2
+        data_padded = np.pad(data, ((0, 0), (pad, pad)), mode="reflect")
 
-    for i in range(data.shape[1])[:1]:
-        print(f"Window {i}")
-        window = find_window(np.nan_to_num(data_padded, nan=0.0)[:, i : i + width])
-        window_mask[:, i] = window
+        for i in range(data.shape[1]):
+            print(f"Window {i}")
+            window = find_window(np.nan_to_num(data_padded, nan=0.0)[:, i : i + width])
+            window_mask[:, i] = window
+
+        np.save("results/signal_mask.npy", window_mask)
 
     red_overlay = np.zeros((*data.shape, 3))
     red_overlay[..., 0] = 1
@@ -124,11 +133,12 @@ def main() -> None:
     )
     axes[1, 0].imshow(data, aspect="auto", cmap="gray", interpolation="none")
 
-    idx = 0
+    idx = 40
     indices = np.where(window_mask[:, idx] == 1)[0]
     mindex = indices[0] - 5
     maxdex = indices[-1] + 5
     axes[0, 1].plot(data[mindex:maxdex, idx])
+    axes[0, 1].set_title(f"signal at x={idx}")
     plt.show()
 
 
