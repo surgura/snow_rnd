@@ -11,7 +11,7 @@ import os
 
 
 def denoise(matrix: npt.ArrayLike) -> npt.ArrayLike:
-    lmbda_factor = 1.5
+    lmbda_factor = 0.3
     lmbda = 1.0 / np.sqrt(max(matrix.shape))
     low_rank, sparse = rpca_pcp_ialm(
         matrix,
@@ -98,7 +98,7 @@ def main() -> None:
     else:
         window_mask = np.zeros_like(data)
 
-        width = 9
+        width = 15
         pad = width // 2
         data_padded = np.pad(data, ((0, 0), (pad, pad)), mode="reflect")
 
@@ -112,9 +112,17 @@ def main() -> None:
     # mask min/max
     first = np.argmax(window_mask, axis=0)
     last = window_mask.shape[0] - 1 - np.argmax(window_mask[::-1], axis=0)
-    signal_indices = np.stack([first - 5, last + 5], axis=1)
+    signal_indices = np.stack([first - 50, last + 50], axis=1)
     for i, (start, end) in enumerate(signal_indices):
         window_mask[start:end, i] = 1
+
+    # test denoise
+    idx = 40
+    w2 = 9
+    sample = data[signal_indices[idx][0] : signal_indices[idx][1], 40 - w2 : 40 + w2]
+    sample_signal = sample[:, w2]
+    sample_denoised = denoise(sample)
+    sample_denoised_signal = sample_denoised[:, w2]
 
     red_overlay = np.zeros((*data.shape, 3))
     red_overlay[..., 0] = 1
@@ -140,12 +148,10 @@ def main() -> None:
     )
     axes[1, 0].imshow(data, aspect="auto", cmap="gray", interpolation="none")
 
-    idx = 40
-    indices = np.where(window_mask[:, idx] == 1)[0]
-    mindex = indices[0] - 5
-    maxdex = indices[-1] + 5
-    axes[0, 1].plot(data[mindex:maxdex, idx])
+    axes[0, 1].plot(sample_signal)
     axes[0, 1].set_title(f"signal at x={idx}")
+    axes[1, 1].plot(sample_denoised_signal)
+    axes[1, 1].set_title(f"denoised signal at x={idx}")
     plt.show()
 
 
