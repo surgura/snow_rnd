@@ -21,26 +21,6 @@ def load_file_into_xr(file: str) -> xr.Dataset:
     ).transpose()
 
 
-def find_common_time(datasets, atol=1e-12):
-    times = [ds.coords["time"].values for ds in datasets]
-    ref_time = times[0]
-
-    for t in times[1:]:
-        # Try to align ref_time and t by finding the first exact match
-        for i in range(len(ref_time)):
-            sub_ref = ref_time[i:]
-            if len(sub_ref) > len(t):
-                sub_ref = sub_ref[: len(t)]
-            else:
-                t = t[: len(sub_ref)]
-            if np.allclose(sub_ref, t, atol=atol):
-                ref_time = sub_ref
-                break
-        else:
-            return None  # No alignment found
-    return ref_time
-
-
 def concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
     # Estimate dt from the first dataset
     dt = float(chunks[0].time[1] - chunks[0].time[0])
@@ -82,29 +62,18 @@ def concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
         )
         padded_dsets.append(padded_ds)
 
-    cc = xr.concat(padded_dsets, dim="sample_number")
+    combined = xr.concat(padded_dsets, dim="sample_number")
 
     fix2, axs = plt.subplots(
         2,
     )
-    cc.power.pipe(lambda da: 20 * np.log10(np.abs(da))).plot(ax=axs[0])
-    # chunks[0].power.pipe(np.isnan).plot(ax=axs[0], add_colorbar=False)
-    # chunks[1].power.pipe(np.isnan).plot(ax=axs[1], add_colorbar=False)
-    # chunks[1].power.fillna(0).plot(ax=ax)
-    # ((chunks[1].power == 0) | chunks[1].power.isnull()).plot(ax=ax)
-    # chunks[1].power.where(chunks[1].power != 0).pipe(np.isnan).sum("time").plot(
-    #     ax=axs[0]
-    # )
-    # chunks[1].power.where(chunks[1].power != 0).pipe(np.isnan).plot(
-    #     ax=axs[1], add_colorbar=False
-    # )
+    combined.power.pipe(lambda da: 20 * np.log10(np.abs(da))).plot(ax=axs[0])
     axs[0].invert_yaxis()
     axs[1].invert_yaxis()
 
     plt.show()
-    # plt.show()
 
-    return chunks[0]  # TODO
+    return combined
 
 
 def load_dataset() -> xr.Dataset:
@@ -117,7 +86,7 @@ def load_dataset() -> xr.Dataset:
                         load_file_into_xr(
                             f"Data_img_{day:0>2}_20170410_01_{chunk_i:0>3}.mat"
                         )
-                        for chunk_i in range(1, 4)
+                        for chunk_i in range(1, 11)
                     ]
                 )
             )
