@@ -4,13 +4,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def load_file_into_xr(file: str) -> xr.Dataset:
+def _load_file_into_xr(file: str) -> xr.Dataset:
     with h5py.File(f"data/{file}", "r") as f:
         power = f["Data"][()]
         time = f["Time"][()].squeeze()
         gps_time = f["GPS_time"][()].squeeze()
 
-    # Build dataset
     return xr.Dataset(
         data_vars=dict(
             power=(["sample_number", "time"], power),
@@ -21,7 +20,7 @@ def load_file_into_xr(file: str) -> xr.Dataset:
     ).transpose()
 
 
-def concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
+def _concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
     # Estimate dt from the first dataset
     dt = float(chunks[0].time[1] - chunks[0].time[0])
 
@@ -29,9 +28,11 @@ def concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
     t_min = min(ds.time.values[0] for ds in chunks)
     t_max = max(ds.time.values[-1] for ds in chunks)
 
-    # 3. Create unified "truth" time array
+    # Create time array
     truth_time = truth_time = np.arange(t_min, t_max + dt * 0.5, dt)
 
+    # For each chunk, match it to the time array with mall tolerance, then pad it with nan.
+    # Error if it doesn't align well.
     padded_dsets = []
     for ds in chunks:
         time = ds.time.values
@@ -62,28 +63,18 @@ def concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
         )
         padded_dsets.append(padded_ds)
 
-    combined = xr.concat(padded_dsets, dim="sample_number")
-
-    fix2, axs = plt.subplots(
-        2,
-    )
-    combined.power.pipe(lambda da: 20 * np.log10(np.abs(da))).plot(ax=axs[0])
-    axs[0].invert_yaxis()
-    axs[1].invert_yaxis()
-
-    plt.show()
-
-    return combined
+    # Return concatenated datasets
+    return xr.concat(padded_dsets, dim="sample_number")
 
 
-def load_dataset() -> xr.Dataset:
-    xr.DataTree(
+def load_data_into_datatree() -> xr.DataTree:
+    return xr.DataTree(
         None,
         {
             f"day_{day:0>2}": xr.DataTree(
-                concat_chunks(
+                _concat_chunks(
                     [
-                        load_file_into_xr(
+                        _load_file_into_xr(
                             f"Data_img_{day:0>2}_20170410_01_{chunk_i:0>3}.mat"
                         )
                         for chunk_i in range(1, 11)
@@ -95,4 +86,10 @@ def load_dataset() -> xr.Dataset:
     )
 
 
-load_dataset()
+def main() -> None:
+    tree = load_data_into_datatree()
+    tree.to_netcdf("results/data.nc")
+
+
+if __name__ == "__main__":
+    main()
