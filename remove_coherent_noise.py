@@ -2,9 +2,8 @@ import numpy as np
 import numpy.typing as npt
 from scipy.ndimage import convolve1d
 from scipy.signal.windows import tukey
-from pathlib import Path
-from read_data import read_data
 import matplotlib.pyplot as plt
+import xarray as xr
 
 
 def boxcar_filter(
@@ -96,66 +95,78 @@ def tukey_filter(
     return filtered_data, coherent_noise
 
 
+def remove_coh_boxcar(data: xr.Dataset) -> xr.Dataset:
+    return data
+
+
 def main() -> None:
-    # create results dir
-    Path("results").mkdir(exist_ok=True)
+    raw_data = xr.open_datatree("results/data.zarr")
 
-    # load data
-    data, gps_time = read_data()
-    # data = (data - data.min()) / (data.max() - data.min())
+    results = xr.DataTree()
+    for transect_name, transect in raw_data.items():
+        print(f"Removing coherent noise using boxcar filter for {transect_name}")
+        no_coh = xr.DataTree(
+            remove_coh_boxcar(transect.dataset), name=f"{transect_name}_coh=boxcar"
+        )
+        no_coh.to_zarr(f"results/intermediate_coh_boxcar/{transect_name}")
+        results[transect_name] = no_coh
+    results.to_zarr("results/coh_boxcar.zarr")
 
-    # estimate sampling interval
-    sampling_interval = (
-        gps_time[len(gps_time) // 2 + 1] - gps_time[len(gps_time) // 2]
-    ).item()
-    cutoff_period = 1
+    # removed_coh_boxcar = raw_data.map_over_datasets(remove_coh_boxcar)
+    # removed_coh_boxcar.to_zarr("results/coh=boxcar.zarr")
 
-    # apply filters
-    boxcar, boxcar_noise = boxcar_filter(
-        data=data, sampling_interval=sampling_interval, cutoff_period=cutoff_period
-    )
-    tukey, tukey_noise = tukey_filter(
-        data, sampling_interval=sampling_interval, cutoff_period=cutoff_period
-    )
+    # # estimate sampling interval
+    # sampling_interval = (
+    #     gps_time[len(gps_time) // 2 + 1] - gps_time[len(gps_time) // 2]
+    # ).item()
+    # cutoff_period = 1
 
-    # save data
-    np.save("results/coh_clean_boxcar.npy", boxcar)
-    np.save("results/coh_noise_boxcar.npy", boxcar_noise)
-    np.save("results/coh_clean_tukey.npy", tukey)
-    np.save("results/coh_noise_tukey.npy", tukey_noise)
-
-    # plot data and save plot
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10), constrained_layout=True)
-    # axes[0, 0].imshow(
-    #     10 * np.log10(data.T), aspect="auto", cmap="gray", interpolation="none"
+    # # apply filters
+    # boxcar, boxcar_noise = boxcar_filter(
+    #     data=data, sampling_interval=sampling_interval, cutoff_period=cutoff_period
     # )
-    # axes[0, 0].set_title("Original")
+    # tukey, tukey_noise = tukey_filter(
+    #     data, sampling_interval=sampling_interval, cutoff_period=cutoff_period
+    # )
+
+    # # save data
+    # np.save("results/coh_clean_boxcar.npy", boxcar)
+    # np.save("results/coh_noise_boxcar.npy", boxcar_noise)
+    # np.save("results/coh_clean_tukey.npy", tukey)
+    # np.save("results/coh_noise_tukey.npy", tukey_noise)
+
+    # # plot data and save plot
+    # fig, axes = plt.subplots(2, 2, figsize=(15, 10), constrained_layout=True)
+    # # axes[0, 0].imshow(
+    # #     10 * np.log10(data.T), aspect="auto", cmap="gray", interpolation="none"
+    # # )
+    # # axes[0, 0].set_title("Original")
+    # # axes[0, 1].plot(tukey[1700])
+    # # axes[0, 1].set_title("Cleaned signal @ 1700")
+    # # axes[0, 1].imshow(tukey_noise.T, aspect="auto", cmap="gray", interpolation="none")
+    # # axes[0, 1].set_title("Clean (by paper)")
+    # axes[0, 0].plot(data[1700])
+    # axes[0, 0].set_title("Original signal @ 1700")
     # axes[0, 1].plot(tukey[1700])
     # axes[0, 1].set_title("Cleaned signal @ 1700")
-    # axes[0, 1].imshow(tukey_noise.T, aspect="auto", cmap="gray", interpolation="none")
-    # axes[0, 1].set_title("Clean (by paper)")
-    axes[0, 0].plot(data[1700])
-    axes[0, 0].set_title("Original signal @ 1700")
-    axes[0, 1].plot(tukey[1700])
-    axes[0, 1].set_title("Cleaned signal @ 1700")
-    axes[1, 0].imshow(
-        # 10 * np.log10(tukey).T,
-        # np.log10(np.clip(np.abs(tukey.T), 1e-10, None)),
-        20 * np.log10(np.abs(tukey.T)),
-        aspect="auto",
-        cmap="gray",
-        interpolation="none",
-    )
-    axes[1, 0].set_title("Clean (Tukey)")
-    axes[1, 1].imshow(
-        20 * np.log10(np.abs(tukey_noise.T)),
-        aspect="auto",
-        cmap="gray",
-        interpolation="none",
-    )
-    axes[1, 1].set_title("Noise (Tukey)")
-    fig.savefig("results/coh_tukey.png")
-    plt.show()
+    # axes[1, 0].imshow(
+    #     # 10 * np.log10(tukey).T,
+    #     # np.log10(np.clip(np.abs(tukey.T), 1e-10, None)),
+    #     20 * np.log10(np.abs(tukey.T)),
+    #     aspect="auto",
+    #     cmap="gray",
+    #     interpolation="none",
+    # )
+    # axes[1, 0].set_title("Clean (Tukey)")
+    # axes[1, 1].imshow(
+    #     20 * np.log10(np.abs(tukey_noise.T)),
+    #     aspect="auto",
+    #     cmap="gray",
+    #     interpolation="none",
+    # )
+    # axes[1, 1].set_title("Noise (Tukey)")
+    # fig.savefig("results/coh_tukey.png")
+    # plt.show()
 
 
 if __name__ == "__main__":

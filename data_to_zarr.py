@@ -49,7 +49,7 @@ def _find_best_index(sorted_array: npt.NDArray, value: float, tol: float) -> int
     return idx
 
 
-def _concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
+def _concat_chunks(chunks: list[xr.Dataset], description: str) -> xr.Dataset:
     # Estimate dt from the first dataset
     dt = float(chunks[0].time[1] - chunks[0].time[0])
 
@@ -93,24 +93,27 @@ def _concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
         padded_dsets.append(padded_ds)
 
     # Return concatenated datasets
-    return xr.concat(padded_dsets, dim="sample_number")
+    combined = xr.concat(padded_dsets, dim="sample_number")
+    combined.attrs["description"] = description
+    return combined
 
 
 def load_data_into_datatree() -> xr.DataTree:
     return xr.DataTree(
         None,
         {
-            f"day_{day:0>2}": xr.DataTree(
+            f"transect_{transect:0>2}": xr.DataTree(
                 _concat_chunks(
                     [
                         _load_file_into_xr(
-                            f"data/raw/Data_img_{day:0>2}_20170410_01_{chunk_i:0>3}.mat"
+                            f"data/raw/Data_img_{transect:0>2}_20170410_01_{chunk_i:0>3}.mat"
                         )
                         for chunk_i in range(1, 11)
-                    ]
+                    ],
+                    description=f"transect_{transect:0>2}",
                 )
             )
-            for day in [1, 2, 4]
+            for transect in [1, 2, 4]
         },
     )
 
