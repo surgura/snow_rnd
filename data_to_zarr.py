@@ -1,6 +1,5 @@
 import h5py
 import xarray as xr
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -88,7 +87,7 @@ def load_data_into_datatree() -> xr.DataTree:
 
 def main() -> None:
     tree = load_data_into_datatree()
-    tree.to_netcdf("results/data.nc")
+    tree.to_zarr("results/data.zarr")
 
 
 if __name__ == "__main__":
