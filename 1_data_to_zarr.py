@@ -18,7 +18,7 @@ def _load_file_into_xr(file: str) -> xr.Dataset:
         ),
         coords=dict(time=("time", time)),
         attrs=dict(description=f"IceBird dataset {file}"),
-    ).transpose()
+    )
 
 
 def _find_best_index(sorted_array: npt.NDArray, value: float, tol: float) -> int:
@@ -79,12 +79,12 @@ def _concat_chunks(chunks: list[xr.Dataset], description: str) -> xr.Dataset:
                 f"End time does not align with truth_time within tolerance. {ds.description}"
             )
 
-        padded_power = np.full((len(truth_time), power.shape[1]), np.nan)
-        padded_power[start_idx:end_idx, :] = power
+        padded_power = np.full((power.shape[0], len(truth_time)), np.nan)
+        padded_power[:, start_idx:end_idx] = power
 
         padded_ds = xr.Dataset(
             data_vars=dict(
-                power=(["time", "sample_number"], padded_power),
+                power=(["sample_number", "time"], padded_power),
                 gps_time=(["sample_number"], ds.gps_time.values),
             ),
             coords=dict(time=("time", truth_time)),
