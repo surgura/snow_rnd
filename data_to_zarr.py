@@ -42,8 +42,8 @@ def _concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
 
         # Check only first and last time alignment
         if not (
-            abs(truth_time[start_idx] - time[0]) < dt / 2
-            and abs(truth_time[end_idx - 1] - time[-1]) < dt / 2
+            abs(truth_time[start_idx] - time[0]) < dt * 1e-5
+            and abs(truth_time[end_idx - 1] - time[-1]) < dt * 1e-5
         ):
             raise ValueError(
                 "Start or end time does not align with truth_time within tolerance."
