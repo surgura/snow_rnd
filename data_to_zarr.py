@@ -1,10 +1,12 @@
 import h5py
 import xarray as xr
 import numpy as np
+import numpy.typing as npt
 
 
 def _load_file_into_xr(file: str) -> xr.Dataset:
-    with h5py.File(f"data/{file}", "r") as f:
+    print(f"Reading file {file}")
+    with h5py.File(file, "r") as f:
         power = f["Data"][()]
         time = f["Time"][()].squeeze()
         gps_time = f["GPS_time"][()].squeeze()
@@ -17,6 +19,34 @@ def _load_file_into_xr(file: str) -> xr.Dataset:
         coords=dict(time=("time", time)),
         attrs=dict(description=f"IceBird dataset {file}"),
     ).transpose()
+
+
+def _find_best_index(sorted_array: npt.NDArray, value: float, tol: float) -> int:
+    """
+    Find the index in `sorted_array` that best matches `value` within `tol`.
+    Raises ValueError if no match is found.
+
+    Parameters:
+    - sorted_array: 1D array, must be sorted in ascending order.
+    - value: target value to match.
+    - tol: absolute tolerance for match.
+
+    Returns:
+    - index of the closest matching value.
+    """
+    i = np.searchsorted(sorted_array, value)
+
+    candidates = []
+    if i > 0 and abs(sorted_array[i - 1] - value) <= tol:
+        candidates.append((abs(sorted_array[i - 1] - value), i - 1))
+    if i < len(sorted_array) and abs(sorted_array[i] - value) <= tol:
+        candidates.append((abs(sorted_array[i] - value), i))
+
+    if not candidates:
+        return None
+
+    _, idx = min(candidates)
+    return idx
 
 
 def _concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
@@ -37,16 +67,16 @@ def _concat_chunks(chunks: list[xr.Dataset]) -> xr.Dataset:
         time = ds.time.values
         power = ds.power.values
 
-        start_idx = np.searchsorted(truth_time, time[0], side="left")
+        start_idx = _find_best_index(truth_time, time[0], tol=dt * 1e-5)
+        if start_idx is None:
+            raise ValueError(
+                f"End time does not align with truth_time within tolerance. {ds.description}"
+            )
         end_idx = start_idx + len(time)
 
-        # Check only first and last time alignment
-        if not (
-            abs(truth_time[start_idx] - time[0]) < dt * 1e-5
-            and abs(truth_time[end_idx - 1] - time[-1]) < dt * 1e-5
-        ):
+        if not (abs(truth_time[end_idx - 1] - time[-1]) < dt * 1e-5):
             raise ValueError(
-                "Start or end time does not align with truth_time within tolerance."
+                f"End time does not align with truth_time within tolerance. {ds.description}"
             )
 
         padded_power = np.full((len(truth_time), power.shape[1]), np.nan)
@@ -74,13 +104,13 @@ def load_data_into_datatree() -> xr.DataTree:
                 _concat_chunks(
                     [
                         _load_file_into_xr(
-                            f"Data_img_{day:0>2}_20170410_01_{chunk_i:0>3}.mat"
+                            f"data/raw/Data_img_{day:0>2}_20170410_01_{chunk_i:0>3}.mat"
                         )
                         for chunk_i in range(1, 11)
                     ]
                 )
             )
-            for day in range(1, 2)
+            for day in [1, 2, 4]
         },
     )
 
