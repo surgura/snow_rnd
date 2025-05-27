@@ -123,18 +123,54 @@ def remove_coh_boxcar(data: xr.Dataset) -> xr.Dataset:
     )
 
 
+def remove_coh_tukey(data: xr.Dataset) -> xr.Dataset:
+    # estimate sampling interval
+    sampling_interval = (
+        data.gps_time[len(data.gps_time) // 2 + 1]
+        - data.gps_time[len(data.gps_time) // 2]
+    ).item()
+    cutoff_period = 1
+
+    clean, noise = tukey_filter(
+        data=data.power.values,
+        sampling_interval=sampling_interval,
+        cutoff_period=cutoff_period,
+    )
+    gps_time = data.gps_time.data
+
+    return xr.Dataset(
+        data_vars=dict(
+            power_no_coh=(["sample_number", "time"], clean),
+            power_coh=(["sample_number", "time"], noise),
+            gps_time=(["sample_number"], gps_time),
+        ),
+        coords=dict(time=("time", data.time.data)),
+        attrs=dict(description=f"{data.description}_coh_tukey"),
+    )
+
+
 def main() -> None:
     raw_data = xr.open_datatree("results/data.zarr")
 
-    results = xr.DataTree()
+    results_boxcar = xr.DataTree()
     for transect_name, transect in raw_data.items():
         print(f"Removing coherent noise using boxcar filter for {transect_name}")
         no_coh = xr.DataTree(
             remove_coh_boxcar(transect.dataset), name=f"{transect_name}_coh=boxcar"
         )
         no_coh.to_zarr(f"results/intermediate_coh_boxcar/{transect_name}")
-        results[transect_name] = no_coh
-    results.to_zarr("results/coh_boxcar.zarr")
+        results_boxcar[transect_name] = no_coh
+    results_boxcar.to_zarr("results/coh_boxcar.zarr")
+
+    results_tukey = xr.DataTree()
+    for transect_name, transect in raw_data.items():
+        print(f"Removing coherent noise using tukey filter for {transect_name}")
+        no_coh = xr.DataTree(
+            remove_coh_tukey(transect.dataset), name=f"{transect_name}_coh=tukey"
+        )
+        no_coh.to_zarr(f"results/intermediate_coh_tukey/{transect_name}")
+        results_tukey[transect_name] = no_coh
+    results_tukey.to_zarr("results/coh_tukey.zarr")
 
 
 if __name__ == "__main__":
