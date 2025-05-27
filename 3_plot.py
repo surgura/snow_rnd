@@ -14,7 +14,6 @@ def main() -> None:
     for ax, (ds_name, ds) in zip(
         [axes] if len(data) == 1 else axes.flatten(), data.items()
     ):
-        # coarse = ds.dataset.coarsen(sample_number=4, time=4, boundary="trim").mean()
         ds.dataset.transpose().power_aligned.pipe(
             lambda x: np.abs(20 * np.log10(x))
         ).plot(ax=ax)
