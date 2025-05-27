@@ -2,7 +2,6 @@ import numpy as np
 import numpy.typing as npt
 from scipy.ndimage import convolve1d
 from scipy.signal.windows import tukey
-import matplotlib.pyplot as plt
 import xarray as xr
 
 
@@ -150,27 +149,29 @@ def remove_coh_tukey(data: xr.Dataset) -> xr.Dataset:
 
 
 def main() -> None:
-    raw_data = xr.open_datatree("results/data.zarr")
+    raw_data = xr.open_datatree("results/1_data.zarr")
 
     results_boxcar = xr.DataTree()
-    for transect_name, transect in raw_data.items():
-        print(f"Removing coherent noise using boxcar filter for {transect_name}")
+    for polarization_name, polarization in raw_data.items():
+        print(f"Removing coherent noise using boxcar filter for {polarization_name}")
         no_coh = xr.DataTree(
-            remove_coh_boxcar(transect.dataset), name=f"{transect_name}_coh=boxcar"
+            remove_coh_boxcar(polarization.dataset),
+            name=f"{polarization_name}_coh=boxcar",
         )
-        no_coh.to_zarr(f"results/intermediate_coh_boxcar/{transect_name}")
-        results_boxcar[transect_name] = no_coh
-    results_boxcar.to_zarr("results/coh_boxcar.zarr")
+        no_coh.to_zarr(f"results/2_intermediate_coh_boxcar/{polarization_name}")
+        results_boxcar[polarization_name] = no_coh
+    results_boxcar.to_zarr("results/2_coh_boxcar.zarr")
 
     results_tukey = xr.DataTree()
-    for transect_name, transect in raw_data.items():
-        print(f"Removing coherent noise using tukey filter for {transect_name}")
+    for polarization_name, polarization in raw_data.items():
+        print(f"Removing coherent noise using tukey filter for {polarization_name}")
         no_coh = xr.DataTree(
-            remove_coh_tukey(transect.dataset), name=f"{transect_name}_coh=tukey"
+            remove_coh_tukey(polarization.dataset),
+            name=f"{polarization_name}_coh=tukey",
         )
-        no_coh.to_zarr(f"results/intermediate_coh_tukey/{transect_name}")
-        results_tukey[transect_name] = no_coh
-    results_tukey.to_zarr("results/coh_tukey.zarr")
+        no_coh.to_zarr(f"results/2_intermediate_coh_tukey/{polarization_name}")
+        results_tukey[polarization_name] = no_coh
+    results_tukey.to_zarr("results/2_coh_tukey.zarr")
 
 
 if __name__ == "__main__":

@@ -102,25 +102,30 @@ def load_data_into_datatree() -> xr.DataTree:
     return xr.DataTree(
         None,
         {
-            f"transect_{transect:0>2}": xr.DataTree(
+            f"polarization_{polarization_name:0>2}": xr.DataTree(
                 _concat_chunks(
                     [
                         _load_file_into_xr(
-                            f"data/raw/Data_img_{transect:0>2}_20170410_01_{chunk_i:0>3}.mat"
+                            f"data/raw/Data_img_{polarization:0>2}_20170410_01_{chunk_i:0>3}.mat"
                         )
                         for chunk_i in range(1, 11)
                     ],
-                    description=f"transect_{transect:0>2}",
+                    description=f"polarizationtion_{polarization_name:0>2}",
                 )
             )
-            for transect in [1, 2, 4]
+            for polarization, polarization_name in zip(
+                # [1, 2, 4], ["vv", "vh", "hv"], strict=True  # hh files are corrupt
+                [1],
+                ["vv"],
+                strict=True,
+            )
         },
     )
 
 
 def main() -> None:
     tree = load_data_into_datatree()
-    tree.to_zarr("results/data.zarr")
+    tree.to_zarr("results/1_data.zarr")
 
 
 if __name__ == "__main__":
