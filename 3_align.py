@@ -40,7 +40,7 @@ def align(data: xr.Dataset) -> xr.Dataset:
     )
 
     # Centered 201-sample window
-    window_radius = 200
+    window_radius = 100
     time = aligned["time"]
     center_index = time.size // 2
     start = center_index - window_radius
@@ -115,7 +115,7 @@ def main() -> None:
         dt = xr.open_datatree(f"results/2_coh_{name}.zarr")
         aligned = xr.DataTree()
         for polarization_name, polarization in dt.items():
-            aligned[f"{polarization_name}_aligned"] = align(polarization.dataset)
+            aligned[f"{polarization_name}"] = align(polarization.dataset)
         aligned.to_zarr(f"results/3_aligned_coh_{name}.zarr")
 
 

@@ -7,8 +7,8 @@ def main() -> None:
     data = xr.open_datatree("results/3_aligned_coh_boxcar.zarr")
     fig, axes = plt.subplots(
         nrows=len(data),
-        figsize=(3840 / 100, 2160 / 100),
-        dpi=100,
+        # figsize=(3840 / 100, 2160 / 100),
+        # dpi=100,
         constrained_layout=True,
     )
     for ax, (ds_name, ds) in zip(
