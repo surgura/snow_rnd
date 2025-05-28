@@ -10,11 +10,15 @@ def _load_file_into_xr(file: str) -> xr.Dataset:
         power = f["Data"][()]
         time = f["Time"][()].squeeze()
         gps_time = f["GPS_time"][()].squeeze()
+        elevation = f["Elevation"][()].squeeze()
+        fasttime_sample_frequency = f["param_qlook"]["radar"]["fs"][()].item()
 
     return xr.Dataset(
         data_vars=dict(
             power=(["sample_number", "time"], power),
             gps_time=(["sample_number"], gps_time),
+            elevation=(["sample_number"], elevation),
+            fasttime_sample_frequency=(fasttime_sample_frequency),
         ),
         coords=dict(time=("time", time)),
         attrs=dict(description=f"IceBird dataset {file}"),
@@ -86,6 +90,8 @@ def _concat_chunks(chunks: list[xr.Dataset], description: str) -> xr.Dataset:
             data_vars=dict(
                 power=(["sample_number", "time"], padded_power),
                 gps_time=(["sample_number"], ds.gps_time.values),
+                elevation=(["sample_number"], ds.elevation.values),
+                fasttime_sample_frequency=(ds.fasttime_sample_frequency),
             ),
             coords=dict(time=("time", truth_time)),
             attrs=ds.attrs,

@@ -110,12 +110,16 @@ def remove_coh_boxcar(data: xr.Dataset) -> xr.Dataset:
         cutoff_period=cutoff_period,
     )
     gps_time = data.gps_time.data
+    elevation = data.elevation.data
+    fasttime_sample_frequency = data.fasttime_sample_frequency.data
 
     return xr.Dataset(
         data_vars=dict(
             power_no_coh=(["sample_number", "time"], clean),
             power_coh=(["sample_number", "time"], noise),
             gps_time=(["sample_number"], gps_time),
+            elevation=(["sample_number"], elevation),
+            fasttime_sample_frequency=(fasttime_sample_frequency),
         ),
         coords=dict(time=("time", data.time.data)),
         attrs=dict(description=f"{data.description}_coh_boxcar"),
@@ -136,12 +140,16 @@ def remove_coh_tukey(data: xr.Dataset) -> xr.Dataset:
         cutoff_period=cutoff_period,
     )
     gps_time = data.gps_time.data
+    elevation = data.elevation.data
+    fasttime_sample_frequency = data.fasttime_sample_frequency.data
 
     return xr.Dataset(
         data_vars=dict(
             power_no_coh=(["sample_number", "time"], clean),
             power_coh=(["sample_number", "time"], noise),
             gps_time=(["sample_number"], gps_time),
+            elevation=(["sample_number"], elevation),
+            fasttime_sample_frequency=(fasttime_sample_frequency),
         ),
         coords=dict(time=("time", data.time.data)),
         attrs=dict(description=f"{data.description}_coh_tukey"),

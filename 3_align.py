@@ -3,56 +3,95 @@ import numpy as np
 
 
 def align(data: xr.Dataset) -> xr.Dataset:
-    """
-    Return a new Dataset with aligned waveforms based on maximum power.
-    NaN-padded, skips alignment for all-NaN waveforms.
-    Crops to fixed 201-sample window. Keeps all sample_number entries.
-    """
+    c = 2.997e08
+
     power = data["power_no_coh"]
-    is_all_nan = power.isnull().all(dim="time")
-    safe_power = power.where(~is_all_nan, 0)
-    max_indices = safe_power.argmax(dim="time")
-    center_index = power.sizes["time"] // 2
-    shifts = center_index - max_indices
+    elevation = data["elevation"]
+    sampling_interval = 1.0 / data["fasttime_sample_frequency"][0].item()
 
-    def safe_shift(arr, shift, is_valid):
-        if not is_valid:
-            return np.full_like(arr, np.nan)
-        result = np.full_like(arr, np.nan)
-        if shift > 0:
-            result[shift:] = arr[:-shift]
-        elif shift < 0:
-            result[:shift] = arr[-shift:]
-        else:
-            result[:] = arr
-        return result
+    ref_elev = elevation.where(~np.isnan(elevation)).mean()
 
-    aligned = xr.apply_ufunc(
-        safe_shift,
-        power,
-        shifts,
-        ~is_all_nan,
-        input_core_dims=[["time"], [], []],
-        output_core_dims=[["time"]],
-        vectorize=True,
-        dask="parallelized",
-        output_dtypes=[power.dtype],
-    )
+    dtime = (elevation - ref_elev) / (c / 2)
 
-    # Centered 201-sample window
-    window_radius = 100
-    time = aligned["time"]
-    center_index = time.size // 2
-    start = center_index - window_radius
-    end = center_index + window_radius + 1
-    aligned_window = aligned.isel(time=slice(start, end))
+    # Prepare for FFT-based alignment
+    power_filled = power.fillna(0)
+    nt = power.sizes["time"]
+    freqs = np.fft.fftfreq(nt, sampling_interval)
 
-    # Construct output dataset with shared coords
+    # Phase shift matrix: shape (sample_number, time)
+    phase_shifts = np.exp(1j * 2 * np.pi * freqs * dtime.values[:, np.newaxis])
+
+    # Apply FFT → phase correction → IFFT
+    fft_data = np.fft.fft(power_filled, axis=1)
+    fft_corrected = fft_data * phase_shifts
+    aligned = np.fft.ifft(fft_corrected, axis=1).real
+
+    # Set to NaN if waveform was originally all-NaN
+    aligned = xr.DataArray(aligned, dims=power.dims, coords=power.coords)
+    aligned = aligned.where(~power.isnull())
+
+    # # Center 201-sample window
+    # center = power.sizes["time"] // 2
+    # window = aligned.isel(time=slice(center - 100, center + 101))
+
     return xr.Dataset(
-        {"power_aligned": aligned_window},
-        coords=aligned_window.coords,
+        {"power_aligned": aligned},
+        coords=power.coords,
         attrs=dict(description=f"{data.description}_aligned"),
     )
+
+
+# def align(data: xr.Dataset) -> xr.Dataset:
+#     """
+#     Return a new Dataset with aligned waveforms based on maximum power.
+#     NaN-padded, skips alignment for all-NaN waveforms.
+#     Crops to fixed 201-sample window. Keeps all sample_number entries.
+#     """
+#     power = data["power_no_coh"]
+#     is_all_nan = power.isnull().all(dim="time")
+#     safe_power = power.where(~is_all_nan, 0)
+#     max_indices = safe_power.argmax(dim="time")
+#     center_index = power.sizes["time"] // 2
+#     shifts = center_index - max_indices
+
+#     def safe_shift(arr, shift, is_valid):
+#         if not is_valid:
+#             return np.full_like(arr, np.nan)
+#         result = np.full_like(arr, np.nan)
+#         if shift > 0:
+#             result[shift:] = arr[:-shift]
+#         elif shift < 0:
+#             result[:shift] = arr[-shift:]
+#         else:
+#             result[:] = arr
+#         return result
+
+#     aligned = xr.apply_ufunc(
+#         safe_shift,
+#         power,
+#         shifts,
+#         ~is_all_nan,
+#         input_core_dims=[["time"], [], []],
+#         output_core_dims=[["time"]],
+#         vectorize=True,
+#         dask="parallelized",
+#         output_dtypes=[power.dtype],
+#     )
+
+#     # Centered 201-sample window
+#     window_radius = 100
+#     time = aligned["time"]
+#     center_index = time.size // 2
+#     start = center_index - window_radius
+#     end = center_index + window_radius + 1
+#     aligned_window = aligned.isel(time=slice(start, end))
+
+#     # Construct output dataset with shared coords
+#     return xr.Dataset(
+#         {"power_aligned": aligned_window},
+#         coords=aligned_window.coords,
+#         attrs=dict(description=f"{data.description}_aligned"),
+#     )
 
 
 def main() -> None:
